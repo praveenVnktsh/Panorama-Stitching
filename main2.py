@@ -2,6 +2,7 @@ import glob
 import cv2
 import numpy as np
 import os
+from numpy.lib.type_check import imag
 from tqdm import tqdm
 
 
@@ -38,7 +39,6 @@ def getBestHomographyRANSAC(matches, trials = 10000, threshold = 10):
     finalH = None
     nMaxInliers = 0
     randomSample = None
-    # while nMaxInliers < 25:
     for trialIndex in tqdm(range(trials)):
         inliers = []
         randomSample = matches[np.random.choice(len(matches), size=4, replace=False)]
@@ -63,8 +63,7 @@ def transformPoint(i, j, H):
     transformed = transformed.astype(np.int)[:2]
     return np.array(transformed)
 
-def transformImage(img, H, forward = False):
-    global offset
+def transformImage(img, H, dst, forward = False, offset = [0, 0]):
     h, w, _ = img.shape
     if forward:
         coords = np.indices((w, h)).reshape(2, -1)
@@ -73,7 +72,7 @@ def transformImage(img, H, forward = False):
         yo, xo = coords[1, :], coords[0, :]
         yt = np.divide(np.array(transformedPoints[1, :]),np.array(transformedPoints[2, :])).astype(np.int)
         xt = np.divide(np.array(transformedPoints[0, :]),np.array(transformedPoints[2, :])).astype(np.int)
-        transformedImage[yt + offset[1], xt + offset[0]] = img[yo, xo]
+        dst[yt + offset[1], xt + offset[0]] = img[yo, xo]
     else:
 
         Hinv = np.linalg.inv(H)
@@ -90,9 +89,6 @@ def transformImage(img, H, forward = False):
         coords = np.indices((maxX - minX, maxY - minY)).reshape(2, -1)
         coords = np.vstack((coords, np.ones(coords.shape[1]))).astype(np.int)   
 
-        print(coords)
-        print(minX, maxX, minY, maxY) 
-
         coords[0, :] += minX
         coords[1, :] += minY
         transformedPoints = np.dot(Hinv, coords)
@@ -107,68 +103,52 @@ def transformImage(img, H, forward = False):
 
         xo = xo[indices]
         yo = yo[indices]
-        transformedImage[yo + offset[1], xo + offset[0]] = img[yt, xt]
+        dst[yo + offset[1], xo + offset[0]] = img[yt, xt]
 
-
-    
-
-
-
-    
-
-
-imageSet = 4
-imagePaths = sorted(glob.glob('dataset/I' + str(imageSet) + '/*'))
-os.makedirs('outputs/l' + str(imageSet) + '/', exist_ok = True)
-
-orb = cv2.ORB_create()
-bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
-
-shape = (2400, 1600)
-
-offsets = [(0, 0)]
-prevH = np.eye(3)
-
-mid = int(len(imagePaths)/2)
-nextImage = mid + 1
-
-
-transformedImage = np.zeros((15000, 15000, 3))
-
-threshold = 5
-trials = 5000
-offset = [5000, 5000]
-
-for index in range(mid, 0, -1):
-    img2 = cv2.imread(imagePaths[index-1])
-    img1 = cv2.imread(imagePaths[index])
+def execute(index1, index2, prevH):
+    warpedImage = np.zeros((7000, 15000, 3))
+    img1 = cv2.imread(imagePaths[index1])
+    img2 = cv2.imread(imagePaths[index2])
     img1 = cv2.resize(img1, shape)
     img2 = cv2.resize(img2,shape)
-    
     matches = detectFeaturesAndMatch(img2, img1)
-
     H, subsetMatches = getBestHomographyRANSAC(matches, trials = trials, threshold = threshold)
     prevH = np.dot(prevH, H)
-    transformImage(img2, prevH)
-    # print('Warped image size = ',warpedImg2.shape)
-    cv2.imwrite(str(imageSet) + 'output.png', transformedImage)
-    # warpedImages.append(warpedImg2)
-    # offsets.append(offset)
-
-prevH = np.eye(3)
-for index in range(mid + 1, len(imagePaths)):
-    img1 = cv2.imread(imagePaths[index-1])
-    img2 = cv2.imread(imagePaths[index])
-    img1 = cv2.resize(img1, shape)
-    img2 = cv2.resize(img2,shape)
+    transformImage(img2, prevH, dst = warpedImage, offset = offset)
+    cv2.imwrite('outputs/l' + str(imageSet) + '/' + 'warped_' + str(index2) + '.png', warpedImage)
     
-    matches = detectFeaturesAndMatch(img2, img1)
+    return prevH
 
-    H, subsetMatches = getBestHomographyRANSAC(matches, trials = trials, threshold = threshold)
-    prevH = np.dot(prevH, H)
-    transformImage(img2, prevH)
-    # print('Warped image size = ',warpedImg2.shape)
-    cv2.imwrite(str(imageSet) + 'output.png', transformedImage)
-    # warpedImages.append(warpedImg2)
-    # offsets.append(offset)
+
+
+if __name__ == "__main__":
+
+
+    imageSet =6
+    imagePaths = sorted(glob.glob('dataset/I' + str(imageSet) + '/*'))
+    os.makedirs('outputs/l' + str(imageSet) + '/', exist_ok = True)
+
+    orb = cv2.ORB_create()
+    bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
+    shape = (1200, 800)
+    mid = len(imagePaths)//2
+    
+    threshold = 5
+    trials = 10000
+    offset = [5000, 2000]
+       
+    prevH = np.eye(3)
+    prevH = execute(2, 1, prevH)
+    prevH = execute(1, 0, prevH)
+
+    prevH = np.eye(3)
+    prevH = execute(2, 2, prevH) # this is wasteful, but alright :\
+
+    prevH = np.eye(3)
+    prevH = execute(2, 3, prevH)
+    prevH = execute(3, 4, prevH)
+    
+
+    
+
     
