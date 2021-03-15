@@ -40,7 +40,7 @@ def getBestHomographyRANSAC(matches, trials = 10000, threshold = 10):
     randomSample = None
     for trialIndex in tqdm(range(trials)):
         inliers = []
-        randomSample = matches[np.random.choice(len(matches), size=4, replace=False)]
+        randomSample = matches[np.random.choice(len(matches), size=10, replace=False)]
         H = getHomography(randomSample)
         for match in matches:
             src = np.append(match[0], 1).T

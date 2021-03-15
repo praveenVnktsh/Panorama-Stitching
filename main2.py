@@ -106,7 +106,7 @@ def transformImage(img, H, dst, forward = False, offset = [0, 0]):
         dst[yo + offset[1], xo + offset[0]] = img[yt, xt]
 
 def execute(index1, index2, prevH):
-    warpedImage = np.zeros((7000, 15000, 3))
+    warpedImage = np.zeros((1500, 1500, 3))
     img1 = cv2.imread(imagePaths[index1])
     img2 = cv2.imread(imagePaths[index2])
     img1 = cv2.resize(img1, shape)
@@ -123,19 +123,19 @@ def execute(index1, index2, prevH):
 
 if __name__ == "__main__":
 
-
+#  image 6,  1500, 1500, (500, 350)
     imageSet =6
     imagePaths = sorted(glob.glob('dataset/I' + str(imageSet) + '/*'))
     os.makedirs('outputs/l' + str(imageSet) + '/', exist_ok = True)
 
     orb = cv2.ORB_create()
     bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
-    shape = (1200, 800)
+    shape = (600, 400)
     mid = len(imagePaths)//2
     
     threshold = 5
     trials = 10000
-    offset = [5000, 2000]
+    offset = [500, 350]
        
     prevH = np.eye(3)
     prevH = execute(2, 1, prevH)
