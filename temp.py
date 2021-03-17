@@ -1,6 +1,7 @@
 import cv2
 import numpy as np
 def blend(images, masks, n=5):
+    
     """
     Image blending using Image Pyramids. We calculate Gaussian Pyramids using OpenCV.add()
     Once we have the Gaussian Pyramids, we take their differences to find Laplacian Pyramids
@@ -101,12 +102,3 @@ def blend(images, masks, n=5):
         common_pyramids = LS
 
     return ls_
-
-
-img1 = cv2.imread('outputs/l' + str(imageSet) + '/' + 'warped_' + str(index) + '.png')
-img2 = cv2.imread('outputs/l' + str(imageSet) + '/' + 'warped_' + str(index + 1) + '.png')
-
-depth = 6
-
-imageSet = 6
-index = 0

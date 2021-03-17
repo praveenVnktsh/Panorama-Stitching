@@ -5,8 +5,6 @@ import os
 from numpy.lib.type_check import imag
 from tqdm import tqdm
 
-
-
 def detectFeaturesAndMatch(img1, img2, nFeaturesReturn = 30):
     kp1, des1 = orb.detectAndCompute(img1,None)
     kp2, des2 = orb.detectAndCompute(img2,None)
@@ -16,7 +14,9 @@ def detectFeaturesAndMatch(img1, img2, nFeaturesReturn = 30):
     for match in matches:
         correspondences.append((kp1[match.queryIdx].pt, kp2[match.trainIdx].pt))
     print('Totally', len(correspondences), 'matches')
-    return np.array(correspondences[:nFeaturesReturn])
+    src = np.float32([ m[0] for m in correspondences[:nFeaturesReturn] ]).reshape(-1,1,2)
+    dst = np.float32([ m[1] for m in correspondences[:nFeaturesReturn] ]).reshape(-1,1,2)
+    return np.array(correspondences[:nFeaturesReturn]), src, dst
 
 def getHomography(matches):
     
@@ -105,37 +105,44 @@ def transformImage(img, H, dst, forward = False, offset = [0, 0]):
         yo = yo[indices]
         dst[yo + offset[1], xo + offset[0]] = img[yt, xt]
 
-def execute(index1, index2, prevH):
-    warpedImage = np.zeros((1500, 1500, 3))
+def execute(index1, index2, prevH, opencv = False):
+    warpedImage = np.zeros((4196, 8192, 3))
     img1 = cv2.imread(imagePaths[index1])
     img2 = cv2.imread(imagePaths[index2])
     img1 = cv2.resize(img1, shape)
     img2 = cv2.resize(img2,shape)
-    matches = detectFeaturesAndMatch(img2, img1)
-    H, subsetMatches = getBestHomographyRANSAC(matches, trials = trials, threshold = threshold)
+    matches, src, dst = detectFeaturesAndMatch(img2, img1)
+    if opencv:
+        H, mask = cv2.findHomography(src, dst, cv2.RANSAC, threshold)
+    else:
+        H, subsetMatches = getBestHomographyRANSAC(matches, trials = trials, threshold = threshold)
     prevH = np.dot(prevH, H)
     transformImage(img2, prevH, dst = warpedImage, offset = offset)
-    cv2.imwrite('outputs/l' + str(imageSet) + '/' + 'warped_' + str(index2) + '.png', warpedImage)
+    if opencv:
+        st = 'opencv'
+    else:
+        st = ''
+    cv2.imwrite('outputs/l' + str(imageSet) + '/' +  st +  'warped_' + str(index2) +  '.png', warpedImage)
     
     return prevH
-
 
 
 if __name__ == "__main__":
 
 #  image 6,  1500, 1500, (500, 350)
-    imageSet =6
+    # img 5, 1500, 3000
+    imageSet = 4
     imagePaths = sorted(glob.glob('dataset/I' + str(imageSet) + '/*'))
     os.makedirs('outputs/l' + str(imageSet) + '/', exist_ok = True)
 
     orb = cv2.ORB_create()
     bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
-    shape = (600, 400)
+    shape = (1200, 800)
     mid = len(imagePaths)//2
     
-    threshold = 5
+    threshold = 20
     trials = 10000
-    offset = [500, 350]
+    offset = [2000, 600]
        
     prevH = np.eye(3)
     prevH = execute(2, 1, prevH)
@@ -147,6 +154,23 @@ if __name__ == "__main__":
     prevH = np.eye(3)
     prevH = execute(2, 3, prevH)
     prevH = execute(3, 4, prevH)
+
+    #  with opencv now
+    # blend(opencv = False)
+    # prevH = np.eye(3)
+    # prevH = execute(2, 1, prevH, True)
+    # prevH = execute(1, 0, prevH, True)
+
+    # prevH = np.eye(3)
+    # prevH = execute(2, 2, prevH, True) # this is wasteful, but alright :\
+
+    # prevH = np.eye(3)
+    # prevH = execute(2, 3, prevH, True)
+    # prevH = execute(3, 4, prevH, True)
+    # blend(opencv = True)
+
+
+
     
 
     
