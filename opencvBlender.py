@@ -56,7 +56,7 @@ if __name__ == "__main__":
 
     # BEGIN WARPING
 
-    imageSet = 1
+    imageSet = 4
     imagePaths = sorted(glob.glob('dataset/I' + str(imageSet) + '/*'))
     os.makedirs('outputs/l' + str(imageSet) + '/opencv/', exist_ok=True)
 
