@@ -51,8 +51,6 @@ def execute(index1, index2, prevH):
 
 if __name__ == "__main__":
 
-    # image 6,  1500, 1500, (500, 350)
-    # img 5, 1500, 3000
 
     # BEGIN WARPING
 
@@ -67,6 +65,7 @@ if __name__ == "__main__":
     threshold = 5
     trials = 10000
     offset = [1000, 500]
+    # offset so that opencv doesnt warp to 0,0
     offsetMatrix = np.array([[1, 0, offset[0]],
                       [0, 1, offset[1]],
                       [0, 0, 1]])
@@ -93,13 +92,6 @@ if __name__ == "__main__":
     else:
         length = 5
 
-
-
-    # for index in range(1, length):
-    #     img2 = cv2.imread('outputs/l' + str(imageSet) + '/opencv' + 'warped_' + str(index) + '.png')
-    #     stitcher = cv2.createStitcher(True)
-    #     finalImg = stitcher.stitch((finalImg, img2))
-    #     cv2.imwrite('outputs/l' + str(imageSet) + '/opencv/' 'FINALBLENDED.png', finalImg)
 
     b = Blender() # This blender object is written in blender.py. Its been encapsulated in a class to improve ease of use.
     finalImg =  cv2.imread('outputs/l' + str(imageSet) + '/opencv/'  + 'warped_' + str(0) + '.png')

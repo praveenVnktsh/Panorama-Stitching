@@ -17,6 +17,12 @@ There are 4 major things that in this task:
         - Inverse sampling: Here, we compute the Inverse homography matrix, and sample pixels for each destination pixel from the source image. This solves the problem of having holes.
 
     - In order to speed up the process, the transformation has been converted from a O(n^2) loop to a matrix multiplication using the indices.
+    - Since we have several images, we compute the homography of further images as follows:
+        - Don't warp the first image.
+        - 2nd image is warped using computed homography matrix.
+        - Homography between unwarped 2nd and 3rd images is found. The homography matrix with 2 wrt 1 is pre multiplied in order to maintain the changing perspective, as well as the offset.
+        - Same is done for 4 wrt 3. H43_net = H43 * H32 * H21 and so on.
+        - This process is repeated for images in the left as well.
 
 - Blending images
     - In order to blend the images, we use the method of pyramids.

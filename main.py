@@ -159,19 +159,16 @@ def execute(index1, index2, prevH):
 
 if __name__ == "__main__":
 
-    # image 6,  1500, 1500, (500, 350)
-    # img 5, 1500, 3000
-
-
-    # BEGIN WARPING
 
     imageSet = 4
+
+
     imagePaths = sorted(glob.glob('dataset/I' + str(imageSet) + '/*'))
     os.makedirs('outputs/l' + str(imageSet) + '/custom/', exist_ok = True)
 
     orb = cv2.ORB_create()
     bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
-    shape = (600, 400)
+    shape = (600, 400) # resize in order to improve speed and relax size constraints.
     mid = len(imagePaths)//2
     
     threshold = 2
@@ -183,7 +180,7 @@ if __name__ == "__main__":
     prevH = execute(1, 0, prevH)
 
     prevH = np.eye(3)
-    prevH = execute(2, 2, prevH) # this is wasteful, but alright :\
+    prevH = execute(2, 2, prevH) # this is wasteful, but gets the job done.
 
     prevH = np.eye(3)
     prevH = execute(2, 3, prevH)
