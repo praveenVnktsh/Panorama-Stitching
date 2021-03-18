@@ -161,10 +161,10 @@ if __name__ == "__main__":
 
 
     # BEGIN WARPING
-    
+
     imageSet = 6
     imagePaths = sorted(glob.glob('dataset/I' + str(imageSet) + '/*'))
-    os.makedirs('outputs/l' + str(imageSet) + '/', exist_ok = True)
+    os.makedirs('outputs/l' + str(imageSet) + '/custom/', exist_ok = True)
 
     orb = cv2.ORB_create()
     bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
@@ -192,18 +192,17 @@ if __name__ == "__main__":
     # WARPING COMPLETE. BLENDING START
     
     b = Blender() # This blender object is written in blender.py. Its been encapsulated in a class to improve ease of use.
-    st = ''
-    finalImg =  cv2.imread('outputs/l' + str(imageSet) + '/' + st + 'warped_' + str(0) + '.png')
+    finalImg =  cv2.imread('outputs/l' + str(imageSet) + '/custom/'  + 'warped_' + str(0) + '.png')
     if imageSet == 1:
         length = 6
     else:
         length = 5
     for index in range(1, length):
         print('blending', index)
-        img2 = cv2.imread('outputs/l' + str(imageSet) + '/' + st + 'warped_' + str(index) + '.png')
+        img2 = cv2.imread('outputs/l' + str(imageSet) + '/custom' + 'warped_' + str(index) + '.png')
         finalImg, mask1truth, mask2truth = b.blend(finalImg, img2)
         mask1truth = mask1truth + mask2truth
-        cv2.imwrite('outputs/l' + str(imageSet) + '/' + st + 'FINALBLENDED.png', finalImg)
+        cv2.imwrite('outputs/l' + str(imageSet) + '/custom/' 'FINALBLENDED.png', finalImg)
 
     
 
