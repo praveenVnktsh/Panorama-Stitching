@@ -1,13 +1,16 @@
 import cv2
 import numpy as np
-from numpy.lib.function_base import average
-from typing_extensions import final
-class Blender():
 
+
+class Blender():
+    '''
+    Class that performs blending operations on images using pyramids.
+    '''
     def __init__(self, depth = 6):
         self.depth = depth
         
     def getGaussianPyramid(self, img):
+        # For the image, downscale the image, and return an array.
         pyra = [img]
         for i in range(self.depth - 1):
             down = cv2.pyrDown(pyra[i])
@@ -15,8 +18,8 @@ class Blender():
         return pyra
 
     def getLaplacianPyramid(self, img):
+        # for each image, downscale the image, and then subtract with the appropriate gaussian pyramid image to get the laplacian.
         pyra = []
-
         for i in range(self.depth-1):
             nextImg = cv2.pyrDown(img)
             size = (img.shape[1], img.shape[0])
@@ -30,6 +33,8 @@ class Blender():
         return pyra
 
     def getBlendingPyramid(self, lpa, lpb, gpm):
+        # Blends the pyramid stages at each level according to the mask.
+        # since the boundary of the mask changes at each downscaling, we need to get the pyramid for the mask as well
         pyra = []
         for i, mask in enumerate(gpm):
             maskNet = cv2.merge((mask, mask, mask))
@@ -39,6 +44,7 @@ class Blender():
         return pyra
 
     def reconstruct(self, lp):
+        # for each stage in the laplacian pyramid, reconstruct by adding (inverse of what we did when downscaling)
         img = lp[-1]    
         for i in range(len(lp) - 2, -1, -1):
             laplacian = lp[i]
@@ -50,6 +56,8 @@ class Blender():
         return img
 
     def getMask(self, img):
+        # gets the mask of a particular image. Simply a helper function
+
         mask = img[:, :, 0] != 0 
         mask = np.logical_and(img[:, :, 1] != 0, mask)
         mask = np.logical_and(img[:, :, 2] != 0, mask)
@@ -58,63 +66,49 @@ class Blender():
         maskImg[mask] = 1.0
         return maskImg, mask
 
-    def blend(self, img1, img2):
+    def blend(self, img1, img2, strategy = 'STRAIGHTCUT'):
+        '''
+        Blends the two images by getting the pyramids and blending appropriately.
+        '''
+
+        # compupte the required pyramids
         lp1 = self.getLaplacianPyramid(img1)
         lp2 = self.getLaplacianPyramid(img2)
+
+
+        # get the masks of both images.
         _, mask1truth = self.getMask(img1)
         _, mask2truth = self.getMask(img2)
 
+
+        # using the overlaps of both the images, we compute the bounding boxes.
         yi, xi = np.where(mask1truth & mask2truth)
-
-        splitPoint = (np.min(xi) + np.max(xi))//2
-
-        
-        # finalMask = np.zeros(img1.shape[:2])
-        # finalMask[mask1truth] = 1.0
         overlap = mask1truth & mask2truth
-        # finalMask[overlap] = 0.0
-        # finalMask[:, 0:splitPoint] = 1.0
-
         tempMask = np.zeros(img1.shape[:2])
-        # tempMask[mask1truth] = 1.0
-        # tempMask[mask2truth] = 1.0
-        # tempMask[overlap] = 1
-
-        # ret, contours,_ = cv2.findContours(tempMask.astype(np.uint8), 1, 1) 
-        # contours = sorted(contours, key=cv2.contourArea, reverse=True)
-        # rect = cv2.minAreaRect(contours[0])
-        # (x,y),(w,h), a = rect 
-        # box = cv2.boxPoints(rect).astype(np.int)
-        # print(box)
         yb, xb = np.where(overlap)
         minx = np.min(xb)
         maxx = np.max(xb)
         miny = np.min(yb)
         maxy = np.max(yb)
         h, w = tempMask.shape
-        
-        # finalMask = np.zeros(img1.shape[:2])
 
-
-        # finalMask = cv2.fillConvexPoly(finalMask,np.array([
-        #     [
-        #         [minx, miny], 
-        #         [maxx, maxy], 
-        #         [maxx, h], 
-        #         [0, h], 
-        #         [0,0],
-        #         [minx, 0]
-        #     ]
-        #     ]), True,50)
-        # print(finalMask)
-        # split = finalMask == 1.0
         finalMask = np.zeros(img1.shape[:2])
-        finalMask[:, :(minx + maxx)//2] = 1.0
-        tempMask = finalMask.copy()
-        # tempMask[mask1truth] = 0.3
-        # tempMask[mask2truth] = 0.7
-        
-        # finalMask[np.logical_not(mask1truth)] = 0.0
+        if strategy == 'STRAIGHTCUT':
+            # simple strategy if there is only left -> right panning.
+            finalMask[:, :(minx + maxx)//2] = 1.0
+        elif strategy == 'DIAGONAL':
+            # Strategy that allows for slight variations in vertical movement also
+            finalMask = cv2.fillConvexPoly(finalMask,np.array([
+            [
+                [minx, miny], 
+                [maxx, maxy], 
+                [maxx, h], 
+                [0, h], 
+                [0,0],
+                [minx, 0]
+            ]
+            ]), True,50)
+
         
 
         gpm = self.getGaussianPyramid(finalMask)
@@ -122,6 +116,8 @@ class Blender():
         blendPyra = self.getBlendingPyramid(lp1, lp2, gpm)
 
         finalImg = self.reconstruct(blendPyra)
+
+        
         return finalImg, mask1truth, mask2truth
 
 

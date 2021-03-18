@@ -3,10 +3,12 @@ import glob
 import cv2
 import numpy as np
 import os
-from numpy.lib.type_check import imag
 from tqdm import tqdm
 
 def detectFeaturesAndMatch(img1, img2, nFeaturesReturn = 30):
+    '''
+    takes in two images, and returns a set of correspondences between the two images matched using ORB features, sorted from best to worst match using an L2 norm distance.
+    '''
     kp1, des1 = orb.detectAndCompute(img1,None)
     kp2, des2 = orb.detectAndCompute(img2,None)
     matches = bf.match(des1,des2)
@@ -20,7 +22,10 @@ def detectFeaturesAndMatch(img1, img2, nFeaturesReturn = 30):
     return np.array(correspondences[:nFeaturesReturn]), src, dst
 
 def getHomography(matches):
-    
+    '''
+    Takes in the points of correspondences and returns the homography matrix by 
+    solving for the best fit transform using SVD.
+    '''
     A = np.zeros((2*len(matches), 9))
     for i, match in enumerate(matches):
         src = match[0]
@@ -36,13 +41,19 @@ def getHomography(matches):
     H = np.reshape(V[-1], (3, 3) )
     return H
 
-def getBestHomographyRANSAC(matches, trials = 10000, threshold = 10):
+def getBestHomographyRANSAC(matches, trials = 10000, threshold = 10, toChooseSamples = 4):
+    '''
+    Applies the RANSAC algorithm and tries out different homography matrices to compute the best matrix.
+    '''
     finalH = None
     nMaxInliers = 0
     randomSample = None
     for trialIndex in tqdm(range(trials)):
         inliers = []
-        randomSample = matches[np.random.choice(len(matches), size=4, replace=False)]
+        # randomly sample from the correspondences, and then compute homography matrix
+        # after finding homography, see if the number of inliers is the best so far. If yes, we take that homography.
+        # the number of correspondences for which we can compute the homography is a parameter.
+        randomSample = matches[np.random.choice(len(matches), size=toChooseSamples, replace=False)] 
         H = getHomography(randomSample)
         for match in matches:
             src = np.append(match[0], 1).T
@@ -51,31 +62,40 @@ def getBestHomographyRANSAC(matches, trials = 10000, threshold = 10):
             transformed /= transformed[2]
             if np.linalg.norm(transformed - dst) < threshold:
                 inliers.append(match)
+
+        # best match => store 
         if len(inliers) > nMaxInliers:
             nMaxInliers = len(inliers)
             finalH = H
     print('Max inliers = ', nMaxInliers)
-    threshold += 1
     return finalH, randomSample
 
 def transformPoint(i, j, H):
+    '''
+    Helper function that simply transforms the point according to a given homography matrix
+    '''
     transformed = np.dot(H, np.array([i, j, 1]))
     transformed /= transformed[2]
     transformed = transformed.astype(np.int)[:2]
     return np.array(transformed)
 
 def transformImage(img, H, dst, forward = False, offset = [0, 0]):
+    '''
+    Helper function that computes the transformed image after applying homography.
+    '''
     h, w, _ = img.shape
     if forward:
+        # direct conversion from image to warped image without gap filling.
         coords = np.indices((w, h)).reshape(2, -1)
         coords = np.vstack((coords, np.ones(coords.shape[1]))).astype(np.int)    
         transformedPoints = np.dot(H, coords)
         yo, xo = coords[1, :], coords[0, :]
+        # projective transform. Output's 3rd index should be one to convert to cartesian coords.
         yt = np.divide(np.array(transformedPoints[1, :]),np.array(transformedPoints[2, :])).astype(np.int)
         xt = np.divide(np.array(transformedPoints[0, :]),np.array(transformedPoints[2, :])).astype(np.int)
         dst[yt + offset[1], xt + offset[0]] = img[yo, xo]
     else:
-
+        # applies inverse sampling to prevent any aliasing and hole effects in output image.
         Hinv = np.linalg.inv(H)
         topLeft = transformPoint(0, 0, H) 
         topRight = transformPoint(w-1, 0, H) 
@@ -86,17 +106,23 @@ def transformImage(img, H, dst, forward = False, offset = [0, 0]):
         maxX = np.max(box[:, 0])
         minY = np.min(box[:, 1])
         maxY = np.max(box[:, 1])
-
+        # instead of iterating through the pixels, we take indices and do
+        # H.C, where C = coordinates to get the transformed pixels.
         coords = np.indices((maxX - minX, maxY - minY)).reshape(2, -1)
         coords = np.vstack((coords, np.ones(coords.shape[1]))).astype(np.int)   
 
         coords[0, :] += minX
         coords[1, :] += minY
+        # here, we use the inverse transformation from the transformed bounding box to compute the pixel value of the transformed image.
         transformedPoints = np.dot(Hinv, coords)
         yo, xo = coords[1, :], coords[0, :]
+
+        # projective transform. Output's 3rd index should be one to convert to cartesian coords.
         yt = np.divide(np.array(transformedPoints[1, :]),np.array(transformedPoints[2, :])).astype(np.int)
         xt = np.divide(np.array(transformedPoints[0, :]),np.array(transformedPoints[2, :])).astype(np.int)
 
+
+        # to prevent out of range errors
         indices = np.where((yt >= 0) & (yt < h) & (xt >= 0) & (xt < w))
 
         xt = xt[indices]
@@ -104,9 +130,14 @@ def transformImage(img, H, dst, forward = False, offset = [0, 0]):
 
         xo = xo[indices]
         yo = yo[indices]
+
+        # assign pixel values!
         dst[yo + offset[1], xo + offset[0]] = img[yt, xt]
 
-def execute(index1, index2, prevH, opencv = False):
+def execute(index1, index2, prevH):
+    '''
+    Function that, for a given pair of indices, computes the best homography and saves the warped images to disk.
+    '''
     warpedImage = np.zeros((4192, 8192, 3))
     img1 = cv2.imread(imagePaths[index1])
     img2 = cv2.imread(imagePaths[index2])
@@ -114,26 +145,24 @@ def execute(index1, index2, prevH, opencv = False):
     img1 = cv2.resize(img1, shape)
     img2 = cv2.resize(img2,shape)
     matches, src, dst = detectFeaturesAndMatch(img2, img1)
-    if opencv:
-        H, mask = cv2.findHomography(src, dst, cv2.RANSAC, threshold)
-    else:
-        H, subsetMatches = getBestHomographyRANSAC(matches, trials = trials, threshold = threshold)
+    H, subsetMatches = getBestHomographyRANSAC(matches, trials = trials, threshold = threshold)
     prevH = np.dot(prevH, H)
     transformImage(img2, prevH, dst = warpedImage, offset = offset)
-    if opencv:
-        st = 'opencv'
-    else:
-        st = ''
-    cv2.imwrite('outputs/l' + str(imageSet) + '/' +  st +  'warped_' + str(index2) +  '.png', warpedImage)
+   
+    cv2.imwrite('outputs/l' + str(imageSet) + '/warped_' + str(index2) +  '.png', warpedImage)
     
     return prevH
 
 
 if __name__ == "__main__":
 
-#  image 6,  1500, 1500, (500, 350)
+    # image 6,  1500, 1500, (500, 350)
     # img 5, 1500, 3000
-    imageSet = 3
+
+
+    # BEGIN WARPING
+    
+    imageSet = 6
     imagePaths = sorted(glob.glob('dataset/I' + str(imageSet) + '/*'))
     os.makedirs('outputs/l' + str(imageSet) + '/', exist_ok = True)
 
@@ -142,8 +171,8 @@ if __name__ == "__main__":
     shape = (600, 400)
     mid = len(imagePaths)//2
     
-    threshold = 20
-    trials = 500
+    threshold = 5
+    trials = 10000
     offset = [2300, 800]
        
     prevH = np.eye(3)
@@ -160,12 +189,9 @@ if __name__ == "__main__":
     if imageSet == 1:
         prevH = execute(4, 5, prevH)
 
-
-
-
-
-
-    b = Blender()
+    # WARPING COMPLETE. BLENDING START
+    
+    b = Blender() # This blender object is written in blender.py. Its been encapsulated in a class to improve ease of use.
     st = ''
     finalImg =  cv2.imread('outputs/l' + str(imageSet) + '/' + st + 'warped_' + str(0) + '.png')
     if imageSet == 1:
