@@ -1,3 +1,4 @@
+from blending import Blender
 import glob
 import cv2
 import numpy as np
@@ -106,9 +107,10 @@ def transformImage(img, H, dst, forward = False, offset = [0, 0]):
         dst[yo + offset[1], xo + offset[0]] = img[yt, xt]
 
 def execute(index1, index2, prevH, opencv = False):
-    warpedImage = np.zeros((4196, 8192, 3))
+    warpedImage = np.zeros((4192, 8192, 3))
     img1 = cv2.imread(imagePaths[index1])
     img2 = cv2.imread(imagePaths[index2])
+    print('Original image size = ', img1.shape)
     img1 = cv2.resize(img1, shape)
     img2 = cv2.resize(img2,shape)
     matches, src, dst = detectFeaturesAndMatch(img2, img1)
@@ -131,18 +133,18 @@ if __name__ == "__main__":
 
 #  image 6,  1500, 1500, (500, 350)
     # img 5, 1500, 3000
-    imageSet = 4
+    imageSet = 3
     imagePaths = sorted(glob.glob('dataset/I' + str(imageSet) + '/*'))
     os.makedirs('outputs/l' + str(imageSet) + '/', exist_ok = True)
 
     orb = cv2.ORB_create()
     bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
-    shape = (1200, 800)
+    shape = (600, 400)
     mid = len(imagePaths)//2
     
     threshold = 20
-    trials = 10000
-    offset = [2000, 600]
+    trials = 500
+    offset = [2300, 800]
        
     prevH = np.eye(3)
     prevH = execute(2, 1, prevH)
@@ -155,23 +157,27 @@ if __name__ == "__main__":
     prevH = execute(2, 3, prevH)
     prevH = execute(3, 4, prevH)
 
-    #  with opencv now
-    # blend(opencv = False)
-    # prevH = np.eye(3)
-    # prevH = execute(2, 1, prevH, True)
-    # prevH = execute(1, 0, prevH, True)
-
-    # prevH = np.eye(3)
-    # prevH = execute(2, 2, prevH, True) # this is wasteful, but alright :\
-
-    # prevH = np.eye(3)
-    # prevH = execute(2, 3, prevH, True)
-    # prevH = execute(3, 4, prevH, True)
-    # blend(opencv = True)
+    if imageSet == 1:
+        prevH = execute(4, 5, prevH)
 
 
 
-    
+
+
+
+    b = Blender()
+    st = ''
+    finalImg =  cv2.imread('outputs/l' + str(imageSet) + '/' + st + 'warped_' + str(0) + '.png')
+    if imageSet == 1:
+        length = 6
+    else:
+        length = 5
+    for index in range(1, length):
+        print('blending', index)
+        img2 = cv2.imread('outputs/l' + str(imageSet) + '/' + st + 'warped_' + str(index) + '.png')
+        finalImg, mask1truth, mask2truth = b.blend(finalImg, img2)
+        mask1truth = mask1truth + mask2truth
+        cv2.imwrite('outputs/l' + str(imageSet) + '/' + st + 'FINALBLENDED.png', finalImg)
 
     
 

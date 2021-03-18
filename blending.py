@@ -1,7 +1,7 @@
 import cv2
 import numpy as np
-import scipy.misc
-from skimage.draw import line
+from numpy.lib.function_base import average
+from typing_extensions import final
 class Blender():
 
     def __init__(self, depth = 6):
@@ -15,7 +15,6 @@ class Blender():
         return pyra
 
     def getLaplacianPyramid(self, img):
-        # gauss = self.getGaussianPyramid(img)
         pyra = []
 
         for i in range(self.depth-1):
@@ -23,24 +22,15 @@ class Blender():
             size = (img.shape[1], img.shape[0])
             up = cv2.pyrUp(nextImg, dstsize=size)
             sub =  img.astype(float) - up.astype(float)
-            # sub = cv2.subtract(img, up)
             pyra.append(sub)
             img = nextImg
             
         pyra.append(img)
-        # for i in range(self.depth-1, 0, -1):
-        #     size = gauss[i-1].shape[:2][::-1]
-            
-        #     up = cv2.pyrUp(gauss[i], dstsize = size)
-        #     # sub = cv2.subtract(gauss[i-1], up)
-        #     sub = gauss[i-1] -  up
-        #     pyra.append(sub)
-            
+
         return pyra
 
     def getBlendingPyramid(self, lpa, lpb, gpm):
         pyra = []
-        # gpm.reverse()
         for i, mask in enumerate(gpm):
             maskNet = cv2.merge((mask, mask, mask))
             blended = lpa[i]*maskNet + lpb[i]*(1 - maskNet)
@@ -49,8 +39,6 @@ class Blender():
         return pyra
 
     def reconstruct(self, lp):
-        # lp.reverse()
-        
         img = lp[-1]    
         for i in range(len(lp) - 2, -1, -1):
             laplacian = lp[i]
@@ -58,7 +46,6 @@ class Blender():
 
             img = cv2.pyrUp(img, dstsize = size).astype(float)
             img += laplacian.astype(float)
-            print(np.max(img), np.min(laplacian), np.max(laplacian))
 
         return img
 
@@ -75,18 +62,58 @@ class Blender():
         lp1 = self.getLaplacianPyramid(img1)
         lp2 = self.getLaplacianPyramid(img2)
         _, mask1truth = self.getMask(img1)
-        _, mask2truth  = self.getMask(img2)
+        _, mask2truth = self.getMask(img2)
 
         yi, xi = np.where(mask1truth & mask2truth)
 
         splitPoint = (np.min(xi) + np.max(xi))//2
 
-        finalMask = np.zeros(img1.shape[:2])
         
+        # finalMask = np.zeros(img1.shape[:2])
         # finalMask[mask1truth] = 1.0
-        # overlap = mask1truth & mask2truth
+        overlap = mask1truth & mask2truth
         # finalMask[overlap] = 0.0
-        finalMask[:, 0:splitPoint] = 1.0
+        # finalMask[:, 0:splitPoint] = 1.0
+
+        tempMask = np.zeros(img1.shape[:2])
+        # tempMask[mask1truth] = 1.0
+        # tempMask[mask2truth] = 1.0
+        # tempMask[overlap] = 1
+
+        # ret, contours,_ = cv2.findContours(tempMask.astype(np.uint8), 1, 1) 
+        # contours = sorted(contours, key=cv2.contourArea, reverse=True)
+        # rect = cv2.minAreaRect(contours[0])
+        # (x,y),(w,h), a = rect 
+        # box = cv2.boxPoints(rect).astype(np.int)
+        # print(box)
+        yb, xb = np.where(overlap)
+        minx = np.min(xb)
+        maxx = np.max(xb)
+        miny = np.min(yb)
+        maxy = np.max(yb)
+        h, w = tempMask.shape
+        
+        # finalMask = np.zeros(img1.shape[:2])
+
+
+        # finalMask = cv2.fillConvexPoly(finalMask,np.array([
+        #     [
+        #         [minx, miny], 
+        #         [maxx, maxy], 
+        #         [maxx, h], 
+        #         [0, h], 
+        #         [0,0],
+        #         [minx, 0]
+        #     ]
+        #     ]), True,50)
+        # print(finalMask)
+        # split = finalMask == 1.0
+        finalMask = np.zeros(img1.shape[:2])
+        finalMask[:, :(minx + maxx)//2] = 1.0
+        tempMask = finalMask.copy()
+        # tempMask[mask1truth] = 0.3
+        # tempMask[mask2truth] = 0.7
+        
         # finalMask[np.logical_not(mask1truth)] = 0.0
         
 
@@ -95,28 +122,7 @@ class Blender():
         blendPyra = self.getBlendingPyramid(lp1, lp2, gpm)
 
         finalImg = self.reconstruct(blendPyra)
-        return finalImg
+        return finalImg, mask1truth, mask2truth
 
 
-if __name__ == "__main__":
-    # cv2.namedWindow('down', flags=cv2.WINDOW_GUI_NORMAL)
-    b = Blender()
-    imageSet = 6
-    st = ''
-    finalImg =  cv2.imread('outputs/l' + str(imageSet) + '/' + st + 'warped_' + str(0) + '.png')
-    r = b.getLaplacianPyramid(finalImg)
-    finalImg = b.reconstruct(r)
-    cv2.imwrite('output.png', finalImg.astype(np.uint8))
-    
-    for index in range(1, 5):
-        
-        img2 = cv2.imread('outputs/l' + str(imageSet) + '/' + st + 'warped_' + str(index) + '.png')
-        print(index)
-        print(finalImg is None, img2 is None)
-        finalImg = b.blend(finalImg, img2)
-        
-        # finalImg = np.clip(finalImg, 0, 255)
-        cv2.imwrite('output.png', finalImg)
-        
-        
 
